@@ -1,6 +1,7 @@
 #include "stdio.h"
 #include "stdint.h"
 #include "Windows.h"
+#include "math.h"
 
 typedef uint8_t  uint8;
 typedef uint16_t uint16;
@@ -44,30 +45,139 @@ struct Window
     uint32 mHeight = 0;
     WindowFlags mFlags = WINDOW_FLAGS_NONE;
 
-    void Show()
-    {
-        ShowWindow(mWinHandle, SW_SHOWNORMAL);
-        SetActiveWindow(mWinHandle);
-    }
-
-    void Destroy()
-    {
-        DestroyWindow(mWinHandle);
-    }
-
-    void Close()
-    {
-        mFlags |= WINDOW_FLAGS_CLOSE;
-    }
-
-    bool IsClosed()
-    {
-        return mFlags & WINDOW_FLAGS_CLOSE;
-    }
+    void Show();
+    void Destroy();
+    void Close();
+    bool IsClosed();
 };
+
+void Window::Show()
+{
+    ShowWindow(mWinHandle, SW_SHOWNORMAL);
+    SetActiveWindow(mWinHandle);
+}
+
+void Window::Destroy()
+{
+    DestroyWindow(mWinHandle);
+}
+
+void Window::Close()
+{
+    mFlags |= WINDOW_FLAGS_CLOSE;
+}
+
+bool Window::IsClosed()
+{
+    return mFlags & WINDOW_FLAGS_CLOSE;
+}
+
+#define MAX_KEYS 256
+
+struct Input
+{
+    uint8 mKeys[MAX_KEYS];
+    uint8 mPrevKeys[MAX_KEYS];
+
+    // Cursor position in pixels from top left of window
+    int32 mPosX   = 0;
+    int32 mPosY   = 0;
+    // Direction from last cursor movement (normalized)
+    float mDeltaX = 0.f;
+    float mDeltaY = 0.f;
+
+    void Poll();
+    bool IsDown(uint8 key);
+    bool IsJustDown(uint8 key);
+    bool IsUp(uint8 key);
+    bool IsJustUp(uint8 key);
+    void Debug();
+};
+
+void Input::Poll()
+{
+    // Keys
+    memcpy(mPrevKeys, mKeys, MAX_KEYS * sizeof(uint8));
+
+    BOOL ret = GetKeyboardState(mKeys);
+    ASSERT(ret);
+
+    // Cursor
+    POINT point;
+    ret = GetCursorPos(&point);
+    ASSERT(ret);
+    HWND window = GetActiveWindow();
+    if (!window) return;
+
+    ret = ScreenToClient(window, &point);
+    ASSERT(ret);
+
+    float x = (float)point.x;
+    float y = (float)point.y;
+    float prevx = (float)mPosX;
+    float prevy = (float)mPosY;
+
+    float dx = x - prevx;
+    float dy = y - prevy;
+    float dlen = sqrtf(dx * dx + dy * dy);
+
+    if (dlen < 1e-5)
+    {
+        mDeltaX = 0;
+        mDeltaY = 0;
+    }
+    else
+    {
+        mDeltaX = dx / dlen;
+        mDeltaY = dy / dlen;
+    }
+
+    mPosX = x;
+    mPosY = y;
+}
+
+bool Input::IsDown(uint8 key)
+{
+    return mKeys[key] & 0x80;
+}
+
+bool Input::IsJustDown(uint8 key)
+{
+    return IsDown(key)
+        && !(mPrevKeys[key] & 0x80);
+}
+
+bool Input::IsUp(uint8 key)
+{
+    return !(mKeys[key] & 0x80);
+}
+
+bool Input::IsJustUp(uint8 key)
+{
+    return IsUp(key)
+        && (mPrevKeys[key] & 0x80);
+}
+
+void Input::Debug()
+{
+    for (uint32 i = 0; i < MAX_KEYS; i++)
+    {
+        if (IsJustDown(i))
+        {
+            printf("Key %u is down\n", i);
+        }
+    }
+
+    if (mDeltaX != 0 || mDeltaY != 0)
+    {
+        printf("Mouse pos x %d, y %d (delta %.2f, %.2f)\n",
+            mPosX, mPosY, mDeltaX, mDeltaY);
+    }
+}
 
 const char* gAppName = "Solanum";
 Window gWindow = {};
+Input gInput = {};
 
 LRESULT CALLBACK Win32WndProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
@@ -141,6 +251,8 @@ int main()
     while (!gWindow.IsClosed())
     {
         Win32MessageLoop();
+        gInput.Poll();
+        gInput.Debug();
     }
 
     gWindow.Destroy();
