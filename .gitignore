@@ -420,4 +420,5 @@ FodyWeavers.xsd
 # Solanum
 *.sln
 *.vcxproj*
-bin-int/*
+**/bin-int/*
+*.lib.recipe

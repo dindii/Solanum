@@ -67,7 +67,8 @@ project "Solanum"
 
 	defines
 	{
-		"SOL_PLATFORM_WINDOWS"
+		"SOL_PLATFORM_WINDOWS",
+		"WIN32_LEAN_AND_MEAN"
 	}
 
 	filter "configurations:Debug"
