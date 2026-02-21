@@ -417,5 +417,7 @@ FodyWeavers.xsd
 *.msm
 *.msp
 
+# Solanum
 *.sln
 *.vcxproj*
+bin-int/*
